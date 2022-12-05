@@ -1,4 +1,4 @@
--module(rebar3_xref_check_app_calls_SUITE).
+-module(rebar3_check_app_calls_SUITE).
 
 -behaviour(ct_suite).
 

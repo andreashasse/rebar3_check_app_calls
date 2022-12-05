@@ -1,0 +1,8 @@
+{application,
+ rebar3_check_app_calls,
+ [{description, "A rebar plugin that checks calls to dependency applications"},
+  {vsn, git},
+  {applications, [kernel, stdlib]},
+  {env, []},
+  {licenses, ["Apache 2.0"]},
+  {links, [{"github", "git@github.com:anha0825/rebar3_check_app_calls.git"}]}]}.

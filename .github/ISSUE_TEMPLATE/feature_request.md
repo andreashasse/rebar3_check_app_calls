@@ -1,13 +1,13 @@
 ---
 name: Feature request
-about: Suggest an idea for rebar3_xref_check_app_calls
+about: Suggest an idea for rebar3_check_app_calls
 title: ''
 labels: ''
 assignees: ''
 ---
 
-## `rebar3_xref_check_app_calls` version
-[Put release version here and update tag link(0.0.0)...](git@github.com:anha0825/rebar3_xref_check_app_calls.git)
+## `rebar3_check_app_calls` version
+[Put release version here and update tag link(0.0.0)...](git@github.com:anha0825/rebar3_check_app_calls.git)
 
 ## `OS` version
 <!-- Put the `OS` version ... -->

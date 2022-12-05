@@ -1,5 +1,5 @@
-%%% @doc Main entry point for the rebar3 rebar3_xref_check_app_calls plugin.
--module(rebar3_xref_check_app_calls).
+%%% @doc Main entry point for the rebar3 check_app_calls plugin.
+-module(rebar3_check_app_calls).
 
 -export([init/1]).
 
@@ -11,5 +11,5 @@
 
 -spec init(rebar_state:t()) -> {ok, rebar_state:t()}.
 init(State) ->
-    {ok, State1} = rebar3_xref_check_app_calls_prv:init(State),
+    {ok, State1} = rebar3_check_app_calls_prv:init(State),
     {ok, State1}.
