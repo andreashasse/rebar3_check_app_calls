@@ -17,8 +17,9 @@
 
 -type application() :: atom().
 -type xref_server() :: pid().
--type error_type() :: call_non_dep | dep_not_called.
--type analysis_error() :: {error_type(), {application(), application()}}.
+-type analysis_error() ::
+    {call_non_dep | dep_not_called, {application(), application()}} |
+    {undefined_call, mfa(), mfa()}.
 
 %% =============================================================================
 %% Public API
@@ -48,14 +49,17 @@ do(State) ->
     {ok, Xref} = xref:start(?XREF_SERVER_NAME),
 
     ProjectApps = rebar_state:project_apps(State),
-    AllDeps = rebar_state:all_deps(State),
-
+    AllRebarDeps = rebar_state:all_deps(State),
+    AllDeps =
+        ordsets:from_list(
+            lists:flatmap(fun rebar_app_info:applications/1, ProjectApps)),
+    NonRebarDeps = non_rebar_deps(AllRebarDeps, AllDeps),
+    %% io:format("non rebar deps ~p", [NonRebarDeps]),
     xref:set_default(Xref,
                      [{warnings, rebar_state:get(State, xref_warnings, false)},
                       {verbose, rebar_log:is_verbose(State)}]),
-
-    lists:foreach(fun(App) -> add_app(Xref, App) end, ProjectApps ++ AllDeps),
-
+    lists:foreach(fun(App) -> add_non_rebar_app(Xref, App) end, NonRebarDeps),
+    lists:foreach(fun(App) -> add_app(Xref, App) end, ProjectApps ++ AllRebarDeps),
     case analysis(Xref, ProjectApps) of
         [] ->
             {ok, State};
@@ -69,7 +73,26 @@ do(State) ->
 %% Internal functions
 %% =============================================================================
 
+-spec add_non_rebar_app(xref_server(), application()) -> ok.
+add_non_rebar_app(Xref, App) ->
+    {ok, _Res} = xref:add_application(Xref, code:lib_dir(App)),
+    ok.
+
+-spec non_rebar_deps([rebar_app_info:t()], ordsets:ordset(application())) ->
+                        [application()].
+non_rebar_deps(RebarAppInfos, AllDeps) ->
+    RebarApplications =
+        ordsets:from_list(
+            lists:map(fun(App) ->
+                         Name = rebar_app_info:name(App),
+                         binary_to_atom(Name)
+                      end,
+                      RebarAppInfos)),
+    ordsets:subtract(AllDeps, RebarApplications).
+
 -spec format_error(analysis_error()) -> io_lib:chars().
+format_error({undefined_call, {From, To}}) ->
+    io_lib:format("Call from ~p to non dependency ~p~n", [From, To]);
 format_error({call_non_dep, {From, To}}) ->
     io_lib:format("Call from ~p to non dependency ~p~n", [From, To]);
 format_error({dep_not_called, {From, To}}) ->
@@ -93,6 +116,9 @@ analyze_app(Xref, App) ->
     Deps =
         ordsets:from_list(
             rebar_app_info:applications(App)),
+    {ok, UndefinedCalls} =
+        xref:q(Xref, "(XC - UC) || (XU - X - B) | " ++ binary_to_list(Name) ++ ":App"),
+
     {ok, Calls} = xref:q(Xref, "AE | " ++ binary_to_list(Name)),
     {_, Called0} = lists:unzip(Calls),
     Called = ordsets:from_list(Called0),
@@ -100,5 +126,6 @@ analyze_app(Xref, App) ->
     OkNotCalled = ordsets:from_list([kernel, stdlib]),
     CallNonDep = ordsets:subtract(Called, ordsets:add_element(NameAtom, Deps)),
     DepNotCalled = ordsets:subtract(Deps, ordsets:union(OkNotCalled, Called)),
-    [{call_non_dep, {NameAtom, Bad}} || Bad <- CallNonDep]
+    [{undefined_call, Call} || Call <- UndefinedCalls]
+    ++ [{call_non_dep, {NameAtom, Bad}} || Bad <- CallNonDep]
     ++ [{dep_not_called, {NameAtom, Bad}} || Bad <- DepNotCalled].
