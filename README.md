@@ -1,6 +1,6 @@
-# rebar3_xref_check_app_calls
+# rebar3_check_app_calls
 
-A rebar plugin description
+A rebar plugin that checks that you call all apps your app depends on, but no other.
 
 ## Build
 
@@ -13,13 +13,10 @@ $ rebar3 compile
 Add the plugin to your rebar config:
 
 ```erlang
-{project_plugins, [{rebar3_xref_check_app_calls, "~> 0.0.0"}]}.
+{project_plugins, [{rebar3_check_app_calls, "~> 0.0.0"}]}.
 ```
 
 Then just call your plugin directly in an existing application:
 ```sh
-$ rebar3 rebar3_xref_check_app_calls
-===> Fetching rebar3_xref_check_app_calls
-===> Compiling rebar3_xref_check_app_calls
-<Plugin Output>
+$ rebar3 check_app_calls
 ```

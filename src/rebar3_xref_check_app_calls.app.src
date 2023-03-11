@@ -1,8 +1,0 @@
-{application,
- rebar3_xref_check_app_calls,
- [{description, "A rebar plugin"},
-  {vsn, git},
-  {applications, [kernel, stdlib]},
-  {env, []},
-  {licenses, ["Apache 2.0"]},
-  {links, [{"github", "git@github.com:anha0825/rebar3_xref_check_app_calls.git"}]}]}.
