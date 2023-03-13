@@ -19,7 +19,9 @@
 -type xref_server() :: pid().
 -type analysis_error() ::
     {call_non_dep | dep_not_called, {application(), application()}} |
-    {undefined_call, mfa(), mfa()}.
+    {undefined_call, mfa(), mfa()} |
+    {not_recognized_app, {application(), any()}} |
+    {circular_dependency_apps, [application()]}.
 
 %% =============================================================================
 %% Public API
@@ -48,49 +50,83 @@ init(State) ->
 do(State) ->
     {ok, Xref} = xref:start(?XREF_SERVER_NAME),
 
-    ProjectApps = rebar_state:project_apps(State),
-    AllRebarDeps = rebar_state:all_deps(State),
+    ProjectAppInfos = rebar_state:project_apps(State),
+    AllRebarDepInfos = rebar_state:all_deps(State),
+    RebarAppInfos = ProjectAppInfos ++ AllRebarDepInfos,
     AllDeps =
         ordsets:from_list(
-            lists:flatmap(fun rebar_app_info:applications/1, ProjectApps)),
-    NonRebarDeps = non_rebar_deps(AllRebarDeps, AllDeps),
-    %% io:format("non rebar deps ~p", [NonRebarDeps]),
+            lists:flatmap(fun rebar_app_info:applications/1, ProjectAppInfos)),
+    NonRebarDeps = non_rebar_deps(RebarAppInfos, AllDeps),
+    %% io:format("non rebar deps ~p~n", [NonRebarDeps]),
     xref:set_default(Xref,
                      [{warnings, rebar_state:get(State, xref_warnings, false)},
                       {verbose, rebar_log:is_verbose(State)}]),
-    lists:foreach(fun(App) -> add_non_rebar_app(Xref, App) end, NonRebarDeps),
-    lists:foreach(fun(App) -> add_app(Xref, App) end, ProjectApps ++ AllRebarDeps),
-    case analysis(Xref, ProjectApps) of
+    case lists:flatmap(fun(App) -> add_non_rebar_app(Xref, App) end, NonRebarDeps) of
         [] ->
-            {ok, State};
-        Errors ->
+            lists:foreach(fun(App) -> add_app(Xref, App) end, RebarAppInfos),
+            Res = analysis(Xref, ProjectAppInfos)
+                  ++ circular_dependency_apps(Xref, ProjectAppInfos),
+            case Res of
+                [] ->
+                    {ok, State};
+                Errors ->
+                    {error,
+                     lists:flatten(
+                         lists:map(fun format_error/1, Errors))}
+            end;
+        NonRebarAppsAddErrors ->
             {error,
              lists:flatten(
-                 lists:map(fun format_error/1, Errors))}
+                 lists:map(fun format_error/1, NonRebarAppsAddErrors))}
     end.
 
 %% =============================================================================
 %% Internal functions
 %% =============================================================================
 
--spec add_non_rebar_app(xref_server(), application()) -> ok.
+-spec circular_dependency_apps(xref_server(), [rebar_app_info:t()]) -> [analysis_error()].
+circular_dependency_apps(Xref, ProjectAppInfos) ->
+    ProjectApps = apps_from_infos(ProjectAppInfos),
+    {ok, AppComponents} = xref:q(Xref, "components AE"),
+    BadAppComponents =
+        lists:filter(fun ([_App]) ->
+                             false;
+                         (Apps) ->
+                             lists:any(fun(App) -> ordsets:is_element(App, ProjectApps) end, Apps)
+                     end,
+                     AppComponents),
+    [{circular_dependency_apps, Apps} || Apps <- BadAppComponents].
+
+-spec add_non_rebar_app(xref_server(), application()) -> [analysis_error()].
 add_non_rebar_app(Xref, App) ->
-    {ok, _Res} = xref:add_application(Xref, code:lib_dir(App)),
-    ok.
+    case code:lib_dir(App) of
+        {error, Err} ->
+            [{not_recognized_app, {App, Err}}];
+        LibDir ->
+            {ok, _Res} = xref:add_application(Xref, LibDir),
+            []
+    end.
 
 -spec non_rebar_deps([rebar_app_info:t()], ordsets:ordset(application())) ->
                         [application()].
 non_rebar_deps(RebarAppInfos, AllDeps) ->
-    RebarApplications =
-        ordsets:from_list(
-            lists:map(fun(App) ->
-                         Name = rebar_app_info:name(App),
-                         binary_to_atom(Name)
-                      end,
-                      RebarAppInfos)),
+    RebarApplications = apps_from_infos(RebarAppInfos),
     ordsets:subtract(AllDeps, RebarApplications).
 
+-spec apps_from_infos([rebar_app_info:t()]) -> [application()].
+apps_from_infos(AppInfos) ->
+    ordsets:from_list(
+        lists:map(fun(App) ->
+                     Name = rebar_app_info:name(App),
+                     binary_to_atom(Name)
+                  end,
+                  AppInfos)).
+
 -spec format_error(analysis_error()) -> io_lib:chars().
+format_error({circular_dependency_apps, Apps}) ->
+    io_lib:format("Circular dependency apps ~p~n", [Apps]);
+format_error({not_recognized_app, {App, Err}}) ->
+    io_lib:format("Not recognized app ~p Error ~p~n", [App, Err]);
 format_error({undefined_call, {From, To}}) ->
     io_lib:format("Call from ~p to non dependency ~p~n", [From, To]);
 format_error({call_non_dep, {From, To}}) ->
@@ -116,9 +152,11 @@ analyze_app(Xref, App) ->
     Deps =
         ordsets:from_list(
             rebar_app_info:applications(App)),
-    {ok, UndefinedCalls} =
+    {ok, UndefinedCalls0} =
         xref:q(Xref, "(XC - UC) || (XU - X - B) | " ++ binary_to_list(Name) ++ ":App"),
-
+    UndefinedCalls =
+        lists:filter(fun({_Caller, {CalledMod, _, _}}) -> code:which(CalledMod) =/= preloaded end,
+                     UndefinedCalls0),
     {ok, Calls} = xref:q(Xref, "AE | " ++ binary_to_list(Name)),
     {_, Called0} = lists:unzip(Calls),
     Called = ordsets:from_list(Called0),
