@@ -21,7 +21,7 @@
     {call_non_dep | dep_not_called, {application(), application()}} |
     {undefined_call, mfa(), mfa()} |
     {not_recognized_app, {application(), any()}} |
-    {strongly_connected_apps, [application()]}.
+    {circular_dependency_apps, [application()]}.
 
 %% =============================================================================
 %% Public API
@@ -64,7 +64,8 @@ do(State) ->
     case lists:flatmap(fun(App) -> add_non_rebar_app(Xref, App) end, NonRebarDeps) of
         [] ->
             lists:foreach(fun(App) -> add_app(Xref, App) end, RebarAppInfos),
-            Res = analysis(Xref, ProjectAppInfos) ++ strongly_connected_apps(Xref, ProjectAppInfos),
+            Res = analysis(Xref, ProjectAppInfos)
+                  ++ circular_dependency_apps(Xref, ProjectAppInfos),
             case Res of
                 [] ->
                     {ok, State};
@@ -83,8 +84,8 @@ do(State) ->
 %% Internal functions
 %% =============================================================================
 
--spec strongly_connected_apps(xref_server(), [rebar_app_info:t()]) -> [analysis_error()].
-strongly_connected_apps(Xref, ProjectAppInfos) ->
+-spec circular_dependency_apps(xref_server(), [rebar_app_info:t()]) -> [analysis_error()].
+circular_dependency_apps(Xref, ProjectAppInfos) ->
     ProjectApps = apps_from_infos(ProjectAppInfos),
     {ok, AppComponents} = xref:q(Xref, "components AE"),
     BadAppComponents =
@@ -94,7 +95,7 @@ strongly_connected_apps(Xref, ProjectAppInfos) ->
                              lists:any(fun(App) -> ordsets:is_element(App, ProjectApps) end, Apps)
                      end,
                      AppComponents),
-    [{strongly_connected_apps, Apps} || Apps <- BadAppComponents].
+    [{circular_dependency_apps, Apps} || Apps <- BadAppComponents].
 
 -spec add_non_rebar_app(xref_server(), application()) -> [analysis_error()].
 add_non_rebar_app(Xref, App) ->
@@ -122,8 +123,8 @@ apps_from_infos(AppInfos) ->
                   AppInfos)).
 
 -spec format_error(analysis_error()) -> io_lib:chars().
-format_error({strongly_connected_apps, Apps}) ->
-    io_lib:format("Strongly connected apps ~p~n", [Apps]);
+format_error({circular_dependency_apps, Apps}) ->
+    io_lib:format("Circular dependency apps ~p~n", [Apps]);
 format_error({not_recognized_app, {App, Err}}) ->
     io_lib:format("Not recognized app ~p Error ~p~n", [App, Err]);
 format_error({undefined_call, {From, To}}) ->
