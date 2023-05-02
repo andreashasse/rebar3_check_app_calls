@@ -24,7 +24,7 @@ jobs:
         run: rebar3 eunit
 
       - name: Generate docs
-        run: rebar3 doc
+        run: rebar3 edoc
 
       - uses: ncipollo/release-action@v1
         with:
