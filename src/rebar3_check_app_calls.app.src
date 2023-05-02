@@ -4,5 +4,5 @@
   {vsn, git},
   {applications, [kernel, stdlib]},
   {env, []},
-  {licenses, ["Apache 2.0"]},
+  {licenses, ["Apache-2.0"]},
   {links, [{"github", "https://github.com/andreashasse/rebar3_check_app_calls"}]}]}.
