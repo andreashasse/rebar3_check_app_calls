@@ -13,7 +13,7 @@ $ rebar3 compile
 Add the plugin to your rebar config:
 
 ```erlang
-{project_plugins, [{rebar3_check_app_calls, "~> 0.0.0"}]}.
+{project_plugins, [rebar3_check_app_calls]}.
 ```
 
 Then just call your plugin directly in an existing application:
