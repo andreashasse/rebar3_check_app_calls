@@ -118,7 +118,7 @@ apps_from_infos(AppInfos) ->
     ordsets:from_list(
         lists:map(fun(App) ->
                      Name = rebar_app_info:name(App),
-                     binary_to_atom(Name)
+                     binary2atom(Name)
                   end,
                   AppInfos)).
 
@@ -148,7 +148,7 @@ analysis(Xref, Apps) ->
 -spec analyze_app(xref_server(), rebar_app_info:t()) -> [analysis_error()].
 analyze_app(Xref, App) ->
     Name = rebar_app_info:name(App),
-    NameAtom = binary_to_atom(Name),
+    NameAtom = binary2atom(Name),
     Deps =
         ordsets:from_list(
             rebar_app_info:applications(App)),
@@ -167,3 +167,7 @@ analyze_app(Xref, App) ->
     [{undefined_call, Call} || Call <- UndefinedCalls]
     ++ [{call_non_dep, {NameAtom, Bad}} || Bad <- CallNonDep]
     ++ [{dep_not_called, {NameAtom, Bad}} || Bad <- DepNotCalled].
+
+-spec binary2atom(binary()) -> atom().
+binary2atom(Bin) ->
+    list_to_atom(binary_to_list(Bin)).
